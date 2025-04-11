@@ -4,18 +4,14 @@ import serial_asyncio
 
 class LDSDriver:
     def __init__(self, port, baudrate=230400):
-        """
-        Initializes the driver with the given serial port and baudrate.
-        """
+       
         self.port = port
         self.baudrate = baudrate
         self.reader = None
         self.writer = None
 
     async def connect(self):
-        """
-        Opens the serial connection and sends the start command ('b') to spin up the sensor.
-        """
+       
         try:
             self.reader, self.writer = await serial_asyncio.open_serial_connection(
                 url=self.port, baudrate=self.baudrate
@@ -29,9 +25,7 @@ class LDSDriver:
             raise
 
     async def disconnect(self):
-        """
-        Sends the stop command ('e') to the sensor, then closes the connection.
-        """
+     
         if self.writer:
             self.writer.write(b"e")
             await self.writer.drain()
