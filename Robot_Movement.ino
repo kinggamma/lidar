@@ -1,64 +1,124 @@
 #include <AFMotor.h>
 
-// Motor assignments for your motor shield
+
 AF_DCMotor motor1(1); // Front-left
 AF_DCMotor motor2(2); // Back-left
 AF_DCMotor motor3(3); // Front-right
 AF_DCMotor motor4(4); // Back-right
 
-String command = "";  // Stores the last received command
+// Ultrasonic sensor pins (HC‑SR04)
+const int trigPin = 7;
+const int echoPin = 8;
+
+long duration;
+float distanceCM;
+
+String command = "";  // Received command
+String currentCommand = "";
+
+unsigned long lastUltrasonicPrint = 0;
+bool ultrasonicTriggeredSent = false;
 
 void setup() {
-  Serial.begin(9600);  // Must match the Pi's baud rate
-  // Set default motor speeds (adjust as needed)
+  Serial.begin(9600);  
   motor1.setSpeed(200);
   motor2.setSpeed(200);
   motor3.setSpeed(200);
   motor4.setSpeed(200);
+  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+float measureDistanceCM() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  float distance = (duration * 0.0343) / 2;
+  return distance;
 }
 
 void loop() {
-  // If serial data is available, read a full command line (ending with '\n')
+  // Read incoming command (terminated by newline)
   if (Serial.available() > 0) {
     command = Serial.readStringUntil('\n');
-    command.trim();  // Remove extra whitespace or newline characters
+    command.trim();
+    currentCommand = command;
   }
   
-  // Update motor outputs based on the received command word
+  // Process commands
   if (command == "STOP") {
     motor1.run(RELEASE);
     motor2.run(RELEASE);
     motor3.run(RELEASE);
     motor4.run(RELEASE);
-  } 
-  else if (command == "LEFT") {
-    // Left turn: left motors backward, right motors forward
-    motor1.run(BACKWARD); // Front-left
-    motor2.run(BACKWARD); // Back-left
-    motor3.run(FORWARD);  // Front-right
-    motor4.run(FORWARD);  // Back-right
-  } 
-  else if (command == "RIGHT") {
-    // Right turn: left motors forward, right motors backward
-    motor1.run(FORWARD);  // Front-left
-    motor2.run(FORWARD);  // Back-left
-    motor3.run(BACKWARD); // Front-right
-    motor4.run(BACKWARD); // Back-right
-  } 
+    ultrasonicTriggeredSent = false;
+  }
   else if (command == "FRONT") {
-    // Move forward: all motors forward
     motor1.run(FORWARD);
     motor2.run(FORWARD);
     motor3.run(FORWARD);
     motor4.run(FORWARD);
-  } 
-  else {
-    // If command unrecognized, stop for safety.
+    ultrasonicTriggeredSent = false;
+  }
+  else if (command == "LEFT") {
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+    motor3.run(FORWARD);
+    motor4.run(FORWARD);
+    ultrasonicTriggeredSent = false;
+  }
+  else if (command == "RIGHT") {
+    motor1.run(FORWARD);
+    motor2.run(FORWARD);
+    motor3.run(BACKWARD);
+    motor4.run(BACKWARD);
+    ultrasonicTriggeredSent = false;
+  }
+  else if (command == "SPIN") {
+    // Spin in place.
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+    motor3.run(FORWARD);
+    motor4.run(FORWARD);
+    ultrasonicTriggeredSent = false;
+  }
+  else if (command == "BACK") {
+    // Move backward.
+    motor1.run(BACKWARD);
+    motor2.run(BACKWARD);
+    motor3.run(BACKWARD);
+    motor4.run(BACKWARD);
+    // During backup, periodically check ultrasonic sensor.
+    if (millis() - lastUltrasonicPrint > 500) {
+      distanceCM = measureDistanceCM();
+      // If trash is detected within 10 cm, send "ULTRA" to the Pi.
+      if (distanceCM < 10.0 && !ultrasonicTriggeredSent) {
+        Serial.println("ULTRA");
+        ultrasonicTriggeredSent = true;
+      }
+      lastUltrasonicPrint = millis();
+    }
+  }
+  else if (command == "DUMP") {
+    // Trigger dumping mechanism (insert your actual hardware code here).
     motor1.run(RELEASE);
     motor2.run(RELEASE);
     motor3.run(RELEASE);
     motor4.run(RELEASE);
+    ultrasonicTriggeredSent = false;
+  }
+  else {
+    // Unknown command: stop for safety.
+    motor1.run(RELEASE);
+    motor2.run(RELEASE);
+    motor3.run(RELEASE);
+    motor4.run(RELEASE);
+    ultrasonicTriggeredSent = false;
   }
   
-  delay(100);  // Short delay for stability
+  delay(100);
 }
