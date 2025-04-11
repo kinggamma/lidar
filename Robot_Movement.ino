@@ -6,14 +6,14 @@ AF_DCMotor motor2(2); // Back-left
 AF_DCMotor motor3(3); // Front-right
 AF_DCMotor motor4(4); // Back-right
 
-// Ultrasonic sensor pins (HC‑SR04)
+
 const int trigPin = 7;
 const int echoPin = 8;
 
 long duration;
 float distanceCM;
 
-String command = "";  // Received command
+String command = "";  
 String currentCommand = "";
 
 unsigned long lastUltrasonicPrint = 0;
@@ -49,7 +49,7 @@ void loop() {
     currentCommand = command;
   }
   
-  // Process commands
+  
   if (command == "STOP") {
     motor1.run(RELEASE);
     motor2.run(RELEASE);
@@ -87,7 +87,7 @@ void loop() {
     ultrasonicTriggeredSent = false;
   }
   else if (command == "BACK") {
-    // Move backward.
+    
     motor1.run(BACKWARD);
     motor2.run(BACKWARD);
     motor3.run(BACKWARD);
@@ -104,7 +104,7 @@ void loop() {
     }
   }
   else if (command == "DUMP") {
-    // Trigger dumping mechanism (insert your actual hardware code here).
+    
     motor1.run(RELEASE);
     motor2.run(RELEASE);
     motor3.run(RELEASE);
@@ -112,7 +112,6 @@ void loop() {
     ultrasonicTriggeredSent = false;
   }
   else {
-    // Unknown command: stop for safety.
     motor1.run(RELEASE);
     motor2.run(RELEASE);
     motor3.run(RELEASE);
