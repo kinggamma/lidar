@@ -9,31 +9,35 @@ from lds_driver import LDSDriver
 NUM_MEASUREMENTS = 360
 lidar_distances = [0] * NUM_MEASUREMENTS  # in pixels
 SCALING_FACTOR = 200      # 1 meter = 200 pixels
-ROBOT_LENGTH_M = 0.5      # 50 cm robot length
+ROBOT_LENGTH_M = 0.5      # 50 cm
 
-SERIAL_PORT = '/dev/ttyUSB0'
-SERIAL_BAUD = 9600
-ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
+LIDAR_PORT = "/dev/ttyUSB0"
+ARDUINO_PORT = "/dev/ttyACM0"
+LIDAR_BAUD = 230400
+ARDUINO_BAUD = 9600
+
+arduino_ser = serial.Serial(ARDUINO_PORT, ARDUINO_BAUD, timeout=1)
 last_command = None
 
 def send_robot_command(command):
-    global last_command, ser
+    global last_command, arduino_ser
     if command != last_command:
         try:
-            ser.write((command + "\n").encode("utf-8"))
+            arduino_ser.write((command + "\n").encode("utf-8"))
             print("Sending command:", command)
             last_command = command
         except Exception as e:
             print("Error sending command:", e)
 
 def adjusted_reading_for_index(i, reading):
+    # Convert index to angle (in degrees, -180 to 180)
     angle = i if i <= 180 else i - 360
     if -30 <= angle <= 30:
-        offset = 30   # Front offset (15cm)
+        offset = 30    # Front: 15 cm (30 pixels)
     elif 30 < angle <= 90 or -90 <= angle < -30:
-        offset = 38   # Left/Right offset (19cm)
+        offset = 38    # Left/Right: 19 cm (38 pixels)
     else:
-        offset = 76   # Back offset (38cm)
+        offset = 76    # Back: 38 cm (76 pixels)
     adj = reading - offset
     return adj if adj > 0 else 0
 
@@ -62,12 +66,24 @@ async def update_lidar(driver):
             print("Error polling lidar:", e)
         await asyncio.sleep(0.01)
 
+async def wait_for_ultrasonic_trigger():
+    print("Waiting for ultrasonic trigger from Arduino...")
+    ultra_received = False
+    while not ultra_received:
+        if arduino_ser.in_waiting > 0:
+            line = arduino_ser.readline().decode("utf-8", errors="ignore").strip()
+            print("Received from Arduino:", line)
+            if line == "ULTRA":
+                ultra_received = True
+        await asyncio.sleep(0.1)
+    print("Ultrasonic trigger received.")
+
 async def trash_mode():
-    driver = LDSDriver(port=SERIAL_PORT, baudrate=230400)
+    driver = LDSDriver(port=LIDAR_PORT, baudrate=LIDAR_BAUD)
     await driver.connect()
     asyncio.create_task(update_lidar(driver))
     await asyncio.sleep(2)
-
+    
     send_robot_command("STOP")
     await asyncio.sleep(1)
     
@@ -82,11 +98,10 @@ async def trash_mode():
         print("Could not get a valid baseline. Aborting trash mode.")
         send_robot_command("STOP")
         await driver.disconnect()
-        ser.close()
+        arduino_ser.close()
         sys.exit(1)
     print("Baseline adjusted back distance:", baseline_back)
     
-    # Spin 180° so that the back now faces forward.
     send_robot_command("SPIN")
     print("Starting 180-degree spin...")
     spin_start_time = time.time()
@@ -101,15 +116,12 @@ async def trash_mode():
     send_robot_command("STOP")
     print("Spin complete (180° achieved).")
     
-    # Instead of waiting for ultrasonic trigger (which is now handled by Arduino),
-    # back up for a fixed period while the Arduino monitors the ultrasonic sensor.
     send_robot_command("BACK")
-    print("Backing up for 3 seconds...")
-    await asyncio.sleep(3)
+    print("Backing up until ultrasonic trigger is received...")
+    await wait_for_ultrasonic_trigger()
     send_robot_command("STOP")
-    print("Backup complete (assumed ultrasonic trigger).")
+    print("Backup complete (ultrasonic trigger received).")
     
-    # Activate dumping mechanism.
     send_robot_command("DUMP")
     print("Dumping mechanism activated.")
     await asyncio.sleep(2)
@@ -117,8 +129,7 @@ async def trash_mode():
     send_robot_command("STOP")
     print("Trash mode complete.")
     await driver.disconnect()
-    ser.close()
-    sys.exit()
+    arduino_ser.close()
 
 if __name__ == "__main__":
     try:
