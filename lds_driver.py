@@ -104,7 +104,7 @@ class LDSDriver:
 if __name__ == '__main__':
     async def main():
         # Adjust the port for macOS; it might be like '/dev/tty.usbserial-XXXX'
-        driver = LDSDriver(port='/dev/tty.usbserial-0001')
+        driver = LDSDriver(port='/dev/ttyUSB0')
         await driver.connect()
         try:
             while True:
